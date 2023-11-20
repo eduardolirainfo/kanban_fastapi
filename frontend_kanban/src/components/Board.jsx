@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from "react";
+import { DragDropContext, Droppable } from "react-beautiful-dnd";
 import styled from "styled-components";
 import Column from   "./Columns";
-import { DragDropContext, Droppable } from "react-beautiful-dnd";
+import AddColumn from "./AddColumn";
+import Logout from "./Logout";
+ 
 
 const Container = styled.div`
   display: flex;
@@ -11,7 +14,39 @@ const Container = styled.div`
 
   @media (max-width: 768px) {
     flex-direction: column; /* Change to column layout on mobile */
+    margin: 0px 0px 0px 10px;
   }
+`;
+
+const ButtonContainer = styled.div`
+    box-sizing: border-box;
+    border-radius: 4px;
+    overflow: hidden;
+    width: 343px;
+    display: inline-block;
+    vertical-align: top;
+    margin: 36px 0px 0px 0px;
+    border-radius: 12px;
+    display: flex;
+    justify-content: space-between;
+    max-height: 100%;
+    flex-direction: column;
+    flex-grow: 0;
+    flex-shrink: 0;
+    flex-basis: 343px;
+    align-self: start;
+    padding-bottom: 8px;
+    position: relative;
+    white-space: normal;
+    scroll-margin: 8px;
+`;
+
+const AddColumnButton = styled.div`
+    flex: 1;
+    margin: 0 12px;
+    background: none;
+    border: none;
+    box-shadow: none; 
 `;
 
 function Board(props) {
@@ -19,16 +54,7 @@ function Board(props) {
     const initialData = {tasks: {}, columns: {}, columnOrder: []};
     const [board, setBoard] = useState([initialData]);
 
-    useEffect(() => {
-        fetchBoard ().then((data) => setBoard(data));
-    }, []);
-
-    async function fetchBoard() {
-        const response = await fetch("/board");
-        const data = await response.json();
-        return data.board;
-    }
-    
+ 
     function onDragEnd(result) {
         // alert("dropped");
         const { destination, source, draggableId, type } = result;
@@ -96,8 +122,75 @@ function Board(props) {
         setBoard(newState);
     }
 
-    return (
+    useEffect(() => {
+        async function saveBoard(updatedData) {
+            console.log("save board", updatedData);
+    
+            const hasTasks = updatedData.tasks && Object.keys(updatedData.tasks).length > 0;
+            const hasColumns = updatedData.columns && Object.keys(updatedData.columns).length > 0;
+    
+            // Checar se há pelo menos uma tarefa ou mais de uma coluna antes de salvar
+            if (hasTasks || (hasColumns && updatedData.columnOrder.length > 0)) {
+                const response = await fetch("/board", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${props.token}`,
+                    },
+                    body: JSON.stringify(updatedData),
+                    
+                });
+                const data = await response.json();                
+                return data;
+
+                
+            } else {
+                // Se não há tarefas ou colunas, envie um objeto vazio com as chaves necessárias
+                const response = await fetch("/board", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${props.token}`,
+                    },
+                    body: JSON.stringify({
+                        tasks: {},
+                        columns: {},
+                        columnOrder: [],
+                    }),
+                });
+                const data = await response.json();
+                return data;
+            }
+        }
+
+        if (board !== initialData) {
+            saveBoard(board) 
+        }
+ 
+    }, [board  , props.token ]);
+ 
+
+
+      useEffect(() => {
+        async function fetchBoard() {
+          const response = await fetch("/board", {
+                headers: {
+                    "Authorization": `Bearer ${props.token}`,
+                }
+            }
+          );
+          const data = await response.json();
+          return data.board;
+        }
+ 
+        fetchBoard().then((data) => {
+            setBoard(data);
+          })
+      }, [props.token]);
+
+    return ( 
         <DragDropContext onDragEnd={onDragEnd}>
+            
             <Droppable droppableId="all-columns" direction="horizontal" type="column">
                 {provided =>(                    
                 <Container {...provided.droppableProps} ref={provided.innerRef}>
@@ -105,7 +198,8 @@ function Board(props) {
                             board.columnOrder ? (
                                 board.columnOrder.map((columnId, index) => {
                                 const column = board.columns[columnId];
-                                const tasks = column.taskIds.map(taskIds => board.tasks[taskIds]);
+                                const tasks = column.taskIds.map((taskIds) => (board.tasks && board.tasks[taskIds]) || null);
+
                                 return <Column key={column.id} column={column} tasks={tasks} index={index} board={board} setBoard={setBoard}/>;
                                 })
                             ) : (
@@ -113,10 +207,23 @@ function Board(props) {
                             )
                         }
                         {provided.placeholder}
+ 
+                        <ButtonContainer>
+                            <AddColumnButton>
+                                <AddColumn board={board} setBoard={setBoard} />
+                            </AddColumnButton>
+                            <Logout/>
+                        </ButtonContainer>
                     </Container>
+
+                    
                 )}
-            </Droppable>
-        </DragDropContext>
+            </Droppable>   
+
+        </DragDropContext>       
+
+ 
+        
     );
     }
 
